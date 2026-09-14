@@ -1,4 +1,5 @@
 | Run | Modèle | Tables | EX | Soft F1 | Tokens/q | Latence |
 |---|---|---|---|---|---|---|
-| baseline | codestral-2508 | 75 | **0.48** | 0.4772 | 9226 | 0.913s |
-| hybrid | codestral-2508 | 10 | **0.48** | 0.4483 | 2473 | 1.064s |
+| agent | codestral-2508 | 10 | **0.436** | 0.4635 | 2510 | 1.379s |
+| baseline | codestral-2508 | 75 | **0.406** | 0.428 | 9225 | 1.086s |
+| hybrid | codestral-2508 | 10 | **0.444** | 0.4589 | 2407 | 1.096s |

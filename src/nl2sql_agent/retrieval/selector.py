@@ -97,10 +97,11 @@ def build(
     conn: psycopg.Connection | None = None,
     top_k: int = 10,
 ) -> SchemaSelector:
+    """Le mode agent réutilise la recherche hybride : seule la boucle change."""
     if mode == "baseline":
         return FullSchema(tables)
-    if mode == "hybrid":
+    if mode in ("hybrid", "agent"):
         if conn is None:
-            raise ValueError("le mode hybrid a besoin d'une connexion à la base")
+            raise ValueError(f"le mode {mode} a besoin d'une connexion à la base")
         return HybridRetrieval(tables, conn, top_k=top_k)
     raise ValueError(f"mode inconnu : {mode}")

@@ -13,10 +13,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from nl2sql_agent.agent import graph as graph_module
 from nl2sql_agent.agent.baseline import answer, execute
 from nl2sql_agent.evaluation.dataset import Question
 from nl2sql_agent.providers.base import LLMProvider
 from nl2sql_agent.retrieval.selector import SchemaSelector
+from nl2sql_agent.retrieval.validate import Catalog
 
 REPORTS = Path("reports")
 
@@ -37,6 +39,7 @@ class Prediction:
     prompt_tokens: int
     completion_tokens: int
     latency_s: float
+    attempts: int = 0
 
 
 def serializable(rows: list[tuple[Any, ...]] | None) -> list[list[Any]] | None:
@@ -49,42 +52,15 @@ def serializable(rows: list[tuple[Any, ...]] | None) -> list[list[Any]] | None:
     ]
 
 
-def generate_one(
+def _gold(
     question: Question,
-    selector: SchemaSelector,
-    provider: LLMProvider,
-    use_evidence: bool,
-    gold_cache: dict[int, tuple[list[list[Any]] | None, str | None]],
-) -> Prediction:
-    attempt = answer(
-        question.question,
-        selector.select(question.question),
-        provider,
-        evidence=question.evidence if use_evidence else "",
-    )
-
-    # La référence ne dépend pas du modèle : une exécution par question suffit.
-    if question.question_id not in gold_cache:
+    cache: dict[int, tuple[list[list[Any]] | None, str | None]],
+) -> tuple[list[list[Any]] | None, str | None]:
+    """La référence ne dépend pas du modèle : une exécution par question suffit."""
+    if question.question_id not in cache:
         rows, error = execute(question.gold_sql)
-        gold_cache[question.question_id] = (serializable(rows), error)
-    gold_rows, gold_error = gold_cache[question.question_id]
-
-    return Prediction(
-        question_id=question.question_id,
-        db_id=question.db_id,
-        difficulty=question.difficulty,
-        question=question.question,
-        evidence=question.evidence,
-        predicted_sql=attempt.sql,
-        predicted_rows=serializable(attempt.rows),
-        execution_error=attempt.error,
-        gold_sql=question.gold_sql,
-        gold_rows=gold_rows,
-        gold_error=gold_error,
-        prompt_tokens=attempt.completion.prompt_tokens,
-        completion_tokens=attempt.completion.completion_tokens,
-        latency_s=round(attempt.completion.latency_s, 3),
-    )
+        cache[question.question_id] = (serializable(rows), error)
+    return cache[question.question_id]
 
 
 def generate(
@@ -93,27 +69,81 @@ def generate(
     provider: LLMProvider,
     tag: str,
     use_evidence: bool = True,
+    agent: bool = False,
+    catalog: Catalog | None = None,
+    max_attempts: int = 3,
 ) -> Path:
-    """Génère les prédictions et rend le chemin du fichier écrit."""
+    """Génère les prédictions et rend le chemin du fichier écrit.
+
+    En mode agent, chaque question passe par le graphe : validation puis boucle
+    de correction bornée. Sinon, une seule passe.
+    """
+    mode = "agent" if agent else selector.name
     print(
         f"{len(questions)} questions | {provider.name} / {provider.model}"
-        f" | schéma: {selector.name} ({selector.tables_in_prompt} tables)"
+        f" | {mode} ({selector.tables_in_prompt} tables)"
     )
+
+    compiled = None
+    if agent:
+        if catalog is None:
+            raise ValueError("le mode agent a besoin d'un catalogue")
+        compiled = graph_module.build_graph(provider, selector, catalog, max_attempts=max_attempts)
 
     gold_cache: dict[int, tuple[list[list[Any]] | None, str | None]] = {}
     predictions: list[Prediction] = []
     started = time.perf_counter()
 
     for i, question in enumerate(questions, 1):
-        predictions.append(generate_one(question, selector, provider, use_evidence, gold_cache))
+        evidence = question.evidence if use_evidence else ""
+
+        if compiled is not None:
+            result = graph_module.answer(compiled, question.question, evidence)
+            sql, rows = result.sql, result.rows
+            error = result.error
+            p_tokens, c_tokens = result.prompt_tokens, result.completion_tokens
+            latency, attempts = result.latency_s, result.attempts
+        else:
+            attempt = answer(
+                question.question, selector.select(question.question), provider, evidence
+            )
+            sql, rows = attempt.sql, attempt.rows
+            error = attempt.error
+            p_tokens = attempt.completion.prompt_tokens
+            c_tokens = attempt.completion.completion_tokens
+            latency, attempts = round(attempt.completion.latency_s, 3), 0
+
+        gold_rows, gold_error = _gold(question, gold_cache)
+
+        predictions.append(
+            Prediction(
+                question_id=question.question_id,
+                db_id=question.db_id,
+                difficulty=question.difficulty,
+                question=question.question,
+                evidence=question.evidence,
+                predicted_sql=sql,
+                predicted_rows=serializable(rows),
+                execution_error=error,
+                gold_sql=question.gold_sql,
+                gold_rows=gold_rows,
+                gold_error=gold_error,
+                prompt_tokens=p_tokens,
+                completion_tokens=c_tokens,
+                latency_s=latency,
+                attempts=attempts,
+            )
+        )
+
         failed = sum(1 for p in predictions if p.execution_error)
-        print(f"\r{i}/{len(questions)}  erreurs SQL: {failed}", end="", flush=True)
+        retried = sum(1 for p in predictions if p.attempts)
+        print(
+            f"\r{i}/{len(questions)}  echecs: {failed}  reparations: {retried}", end="", flush=True
+        )
 
     elapsed = time.perf_counter() - started
     print(f"\nTerminé en {elapsed:.0f}s")
 
-    # Dossier nommé par le tag, fichier horodaté : deux générations avec le même
-    # tag cohabitent sans s'écraser.
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     directory = REPORTS / tag
     directory.mkdir(parents=True, exist_ok=True)
@@ -123,9 +153,10 @@ def generate(
             "tag": tag,
             "provider": provider.name,
             "model": provider.model,
-            "mode": selector.name,
+            "mode": mode,
             "evidence": use_evidence,
             "tables_in_prompt": selector.tables_in_prompt,
+            "max_attempts": max_attempts if agent else 0,
             "questions": len(questions),
             "generated_at": stamp,
             "wall_time_s": round(elapsed, 1),
@@ -139,6 +170,6 @@ def generate(
     n = len(predictions)
     print(f"Tokens entree/q : {round(sum(p.prompt_tokens for p in predictions) / n)}")
     print(f"Erreurs SQL     : {sum(1 for p in predictions if p.execution_error)}/{n}")
-    print(f"Gold en echec   : {sum(1 for p in predictions if p.gold_error)}/{n}")
+    print(f"Reparations     : {sum(p.attempts for p in predictions)}")
 
     return path
