@@ -42,4 +42,13 @@ eval-quick: ## 30-question smoke set
 
 check: lint test ## Everything CI runs
 
+baseline: ## Generer et evaluer la baseline
+	uv run nl2sql run --mode baseline --n 50
+
+hybrid: ## Generer et evaluer la recherche hybride
+	uv run nl2sql run --mode hybrid --n 50
+
+analyse: ## Comparer les runs et tracer les graphiques
+	uv run nl2sql analyse
+
 .PHONY: help install fmt lint test up down seed index run eval eval-quick check

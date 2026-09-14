@@ -1,11 +1,8 @@
 """Évaluation d'un fichier de prédictions. Aucun appel au modèle.
 
 Tous les taux sont exprimés entre 0 et 1.
-
-    uv run python -m nl2sql_agent.evaluation.evaluate reports/baseline/predictions-*.json
 """
 
-import argparse
 import json
 from pathlib import Path
 from typing import Any
@@ -98,18 +95,15 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("predictions", type=Path)
-    args = parser.parse_args()
-
-    payload = json.loads(args.predictions.read_text(encoding="utf-8"))
+def evaluate_file(predictions: Path) -> Path:
+    """Évalue un fichier de prédictions et rend le chemin du résultat."""
+    payload = json.loads(predictions.read_text(encoding="utf-8"))
     config = payload["config"]
 
     results = [evaluate_one(p) for p in payload["predictions"]]
     summary = summarize(results)
 
-    output = args.predictions.parent / args.predictions.name.replace("predictions-", "evaluation-")
+    output = predictions.parent / predictions.name.replace("predictions-", "evaluation-")
     output.write_text(
         json.dumps(
             {"config": config, "summary": summary, "results": results},
@@ -121,7 +115,10 @@ def main() -> None:
 
     s = summary
     print("-" * 46)
-    print(f"{config['tag']} | {config['model']} | {config['mode']}")
+    print(
+        f"{config['tag']} | {config['model']} | {config['mode']}"
+        f" | {config['tables_in_prompt']} tables"
+    )
     print("-" * 46)
     print(f"Execution accuracy : {s['execution_accuracy']}")
     print(f"Soft F1            : {s['soft_f1']}")
@@ -147,7 +144,4 @@ def main() -> None:
     )
 
     print(f"\nResultats : {output}")
-
-
-if __name__ == "__main__":
-    main()
+    return output

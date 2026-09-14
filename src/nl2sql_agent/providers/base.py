@@ -21,5 +21,6 @@ class LLMProvider(Protocol):
     """Tout ce dont le reste du projet a besoin d'un modèle."""
 
     name: str
+    model: str
 
     def complete(self, system: str, user: str, temperature: float = 0.0) -> Completion: ...

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # Embeddings, run locally
     embedding_model: str = "BAAI/bge-m3"
     embedding_dim: int = 1024
+    embedding_model_api: str = "mistral-embed"
 
     # Database
     postgres_host: str = "localhost"

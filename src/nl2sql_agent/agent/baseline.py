@@ -1,7 +1,6 @@
 """Version naïve : schéma complet dans le prompt, une génération, une exécution.
 
-Sert de référence. Toute amélioration ultérieure se mesure contre elle, donc ce
-fichier ne bouge plus une fois la première mesure prise.
+Sert de référence. Toute amélioration ultérieure se mesure contre elle.
 """
 
 import re
@@ -13,13 +12,33 @@ from nl2sql_agent.providers.base import Completion, LLMProvider
 
 SYSTEM_PROMPT = """Tu écris des requêtes SQL PostgreSQL.
 
-Règles :
+Sortie :
 - Rends uniquement la requête, sans explication ni balise Markdown.
 - Une seule instruction SELECT.
-- Les identifiants sont en minuscules.
+
+Schéma :
 - N'invente aucune table ni colonne : utilise uniquement le schéma fourni.
+- Les identifiants entre guillemets dans le schéma en gardent : "First Date"
+  s'écrit "First Date", jamais first_date.
+- Dans une requête avec jointure, qualifie chaque colonne par sa table.
+- Vérifie que la colonne appartient bien à la table citée : une colonne présente
+  dans une table ne l'est pas forcément dans celle qui s'y joint.
+
+Fonctions :
+- N'utilise que des fonctions PostgreSQL existantes. Les notations DIVIDE(a, b),
+  SUBTRACT(a, b) et MULTIPLY(a, b) qui apparaissent parfois dans l'indication
+  sont de la pseudo-notation : traduis-les en a / b, a - b et a * b.
+- Pour compter sous condition, écris SUM(CASE WHEN cond THEN 1 ELSE 0 END) et
+  non SUM(cond) : PostgreSQL n'additionne pas les booléens.
+- Pour un pourcentage ou une moyenne, force le flottant : multiplie par 100.0
+  ou caste, sinon la division entière tronque.
+
+Types :
 - Les commentaires -- ex: donnent des valeurs réelles de la colonne ; appuie-toi
-  dessus pour écrire les filtres."""
+  dessus pour écrire les filtres et pour déduire le format.
+- EXTRACT et les fonctions de date ne s'appliquent qu'aux colonnes date ou
+  timestamp. Sur une colonne text, utilise SUBSTR ou LIKE.
+- Ne joins que des colonnes de types compatibles."""
 
 
 @dataclass
@@ -61,7 +80,7 @@ def execute(sql: str, limit: int = 1000) -> tuple[list[tuple[Any, ...]] | None, 
         with readonly_connection() as conn, conn.cursor() as cur:
             cur.execute(sql)
             return cur.fetchmany(limit), None
-    except Exception as exc:  # noqa: BLE001 - toute erreur SQL est une donnée, pas un bug
+    except Exception as exc:  # noqa: BLE001 - une erreur SQL est une donnée, pas un bug
         return None, str(exc).strip()
 
 
