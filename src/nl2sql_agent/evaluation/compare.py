@@ -1,92 +1,77 @@
 """Comparaison de résultats SQL.
 
-Le point délicat de l'évaluation. Deux requêtes correctes peuvent être écrites
-très différemment ; on compare donc ce qu'elles retournent, pas leur texte.
+Deux métriques de BIRD Mini-Dev : l'execution accuracy, binaire, et le Soft F1,
+qui donne du crédit aux réponses partiellement justes.
 """
 
-import math
-import re
 from typing import Any
 
 Row = tuple[Any, ...]
 
-FLOAT_TOLERANCE = 1e-6
 
+def match(predicted: list[Row] | None, gold: list[Row] | None) -> bool:
+    """Execution accuracy : set(predicted) == set(gold).
 
-def _normalize(value: Any) -> Any:
-    """Ramène une valeur à une forme comparable."""
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return float(value)
-    # Decimal, date, UUID... : le texte suffit et évite les faux négatifs de type.
-    return str(value).strip()
+    L'usage d'un set ignore l'ordre des lignes et écrase les doublons. La
+    comparaison des valeurs reste exacte, sans tolérance sur les flottants.
 
-
-def _values_equal(a: Any, b: Any) -> bool:
-    if a is None or b is None:
-        return a is None and b is None
-
-    if isinstance(a, float) and isinstance(b, float):
-        if math.isnan(a) and math.isnan(b):
-            return True
-        return math.isclose(a, b, rel_tol=FLOAT_TOLERANCE, abs_tol=FLOAT_TOLERANCE)
-
-    # Un total peut sortir en float d'un côté et en Decimal-devenu-texte de l'autre.
-    if isinstance(a, float) != isinstance(b, float):
-        try:
-            return math.isclose(
-                float(a), float(b), rel_tol=FLOAT_TOLERANCE, abs_tol=FLOAT_TOLERANCE
-            )
-        except (TypeError, ValueError):
-            return False
-
-    return bool(a == b)
-
-
-def _rows_equal(a: Row, b: Row) -> bool:
-    if len(a) != len(b):
-        return False
-    return all(_values_equal(x, y) for x, y in zip(a, b, strict=True))
-
-
-def has_order_by(sql: str) -> bool:
-    """Un ORDER BY dans la requête de référence rend l'ordre significatif."""
-    stripped = re.sub(r"--[^\n]*", " ", sql)
-    return re.search(r"\border\s+by\b", stripped, re.IGNORECASE) is not None
-
-
-def _sortable_key(row: Row) -> tuple[tuple[bool, str], ...]:
-    return tuple((v is None, str(v)) for v in row)
-
-
-def results_match(
-    predicted: list[Row] | None,
-    gold: list[Row] | None,
-    gold_sql: str,
-) -> bool:
-    """Vrai si les deux jeux de résultats sont équivalents.
-
-    L'ordre des lignes ne compte que si la requête de référence trie
-    explicitement. L'ordre des colonnes compte toujours : c'est le protocole
-    officiel de BIRD, et il est strict.
+    Référence : bird-bench/mini_dev, evaluation/evaluation_ex.py
     """
     if predicted is None or gold is None:
         return False
-
-    if len(predicted) != len(gold):
+    try:
+        return set(predicted) == set(gold)
+    except TypeError:
+        # Valeur non hachable dans un résultat (list, dict).
         return False
 
-    if not predicted:
-        return True
 
-    p = [tuple(_normalize(v) for v in row) for row in predicted]
-    g = [tuple(_normalize(v) for v in row) for row in gold]
+def _row_match(predicted_row: Row, gold_row: Row) -> tuple[float, float, float]:
+    """Scores d'une ligne, normalisés par le nombre de colonnes de la référence.
 
-    if not has_order_by(gold_sql):
-        p = sorted(p, key=_sortable_key)
-        g = sorted(g, key=_sortable_key)
+    Une ligne vaut donc au plus 1, qu'elle ait 2 ou 10 colonnes.
+    """
+    total = len(gold_row)
+    if total == 0:
+        return 0.0, 0.0, 0.0
+    matches = sum(1 for v in predicted_row if v in gold_row)
+    pred_only = sum(1 for v in predicted_row if v not in gold_row)
+    gold_only = sum(1 for v in gold_row if v not in predicted_row)
+    return matches / total, pred_only / total, gold_only / total
 
-    return all(_rows_equal(x, y) for x, y in zip(p, g, strict=True))
+
+def soft_f1(predicted: list[Row] | None, gold: list[Row] | None) -> float:
+    """Soft F1 : similarité cellule par cellule, insensible à l'ordre des colonnes.
+
+    Appariement positionnel, comme l'implémentation officielle : la ligne i de
+    la prédiction est comparée à la ligne i de la référence. Conséquence à
+    connaître, l'ordre des lignes compte ici alors que l'EX l'ignore.
+
+    Référence : bird-bench/mini_dev, evaluation/evaluation_f1.py
+    """
+    if not predicted and not gold:
+        return 1.0
+    if predicted is None or gold is None:
+        return 0.0
+
+    # Doublons supprimés en préservant l'ordre d'apparition.
+    p = list(dict.fromkeys(predicted))
+    g = list(dict.fromkeys(gold))
+
+    tp = fp = fn = 0.0
+    for i, gold_row in enumerate(g):
+        if i >= len(p):
+            fn += 1.0  # ligne attendue, absente de la prédiction
+            continue
+        m, po, go = _row_match(p[i], gold_row)
+        tp += m
+        fp += po
+        fn += go
+
+    fp += max(0, len(p) - len(g))  # lignes en trop dans la prédiction
+
+    precision = tp / (tp + fp) if tp + fp > 0 else 0.0
+    recall = tp / (tp + fn) if tp + fn > 0 else 0.0
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
