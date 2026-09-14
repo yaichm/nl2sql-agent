@@ -1,6 +1,8 @@
 """Évaluation d'un fichier de prédictions. Aucun appel au modèle.
 
-uv run python -m nl2sql_agent.evaluation.evaluate reports/baseline/predictions-*.json
+Tous les taux sont exprimés entre 0 et 1.
+
+    uv run python -m nl2sql_agent.evaluation.evaluate reports/baseline/predictions-*.json
 """
 
 import argparse
@@ -69,10 +71,10 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
 
     return {
         "questions": total,
-        "execution_accuracy": round(100 * sum(r["correct"] for r in results) / total, 2),
-        "soft_f1": round(100 * sum(r["soft_f1"] for r in results) / total, 2),
+        "execution_accuracy": round(sum(r["correct"] for r in results) / total, 4),
+        "soft_f1": round(sum(r["soft_f1"] for r in results) / total, 4),
+        "valid_sql_rate": round(executed / total, 4),
         "executed_ok": executed,
-        "valid_sql_rate": round(100 * executed / total, 2),
         "breakdown": {
             k: breakdown.get(k, 0) for k in ("correct", "wrong_result", "sql_error", "gold_failed")
         },
@@ -80,8 +82,8 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
             k: {
                 "total": v["total"],
                 "correct": v["correct"],
-                "accuracy": round(100 * v["correct"] / v["total"], 2),
-                "soft_f1": round(100 * v["f1_sum"] / v["total"], 2),
+                "execution_accuracy": round(v["correct"] / v["total"], 4),
+                "soft_f1": round(v["f1_sum"] / v["total"], 4),
             }
             for k, v in sorted(by_difficulty.items())
         },
@@ -121,21 +123,20 @@ def main() -> None:
     print("-" * 46)
     print(f"{config['tag']} | {config['model']} | {config['mode']}")
     print("-" * 46)
-    print(f"Execution accuracy : {s['execution_accuracy']} %")
-    print(f"Soft F1            : {s['soft_f1']} %")
-    print(f"Requetes executees : {s['executed_ok']}/{s['questions']}  ({s['valid_sql_rate']} %)")
+    print(f"Execution accuracy : {s['execution_accuracy']}")
+    print(f"Soft F1            : {s['soft_f1']}")
+    print(f"Valid SQL rate     : {s['valid_sql_rate']}  ({s['executed_ok']}/{s['questions']})")
     print(f"Latence moyenne    : {s['latency_mean_s']}s")
 
     print("\nVentilation")
     for name, count in s["breakdown"].items():
-        share = round(100 * count / s["questions"], 1)
-        print(f"  {name:<14} {count:>3}   {share:>5} %")
+        print(f"  {name:<14} {count:>3}   {round(count / s['questions'], 4)}")
 
-    print("\nPar difficulte         EX      Soft F1")
+    print("\nPar difficulte          EX    Soft F1")
     for name, d in s["by_difficulty"].items():
         print(
-            f"  {name:<13} {d['correct']:>2}/{d['total']:<3} {d['accuracy']:>6} %"
-            f"  {d['soft_f1']:>6} %"
+            f"  {name:<13} {d['correct']:>2}/{d['total']:<3}"
+            f" {d['execution_accuracy']:>6}  {d['soft_f1']:>6}"
         )
 
     print("\nTokens")
