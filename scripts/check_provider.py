@@ -1,4 +1,4 @@
-"""Vérifie que le fournisseur répond. uv run python -m scripts.check_provider"""
+"""Checks that the provider responds. uv run python -m scripts.check_provider"""
 
 from nl2sql_agent.providers.factory import get_provider
 

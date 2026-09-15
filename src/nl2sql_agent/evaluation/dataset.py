@@ -1,4 +1,4 @@
-"""Chargement des questions BIRD."""
+"""Loads the BIRD questions."""
 
 import json
 import random
@@ -39,10 +39,10 @@ def load(path: Path = DEFAULT_PATH) -> list[Question]:
 
 
 def sample(questions: list[Question], n: int, seed: int = 42) -> list[Question]:
-    """Échantillon stratifié par difficulté, reproductible.
+    """Stratified sample by difficulty, reproducible.
 
-    Le seed est fixe : deux runs sur le même n portent sur les mêmes questions,
-    sinon les mesures ne seraient pas comparables.
+    The seed is fixed so two runs on the same n cover the same questions —
+    otherwise measurements wouldn't be comparable.
     """
     if n >= len(questions):
         return questions
@@ -57,7 +57,7 @@ def sample(questions: list[Question], n: int, seed: int = 42) -> list[Question]:
         share = int(n * len(group) / len(questions))
         picked.extend(rng.sample(group, min(share, len(group))))
 
-    # Les arrondis à la baisse laissent un reliquat : on le comble au hasard.
+    # Floor rounding leaves a remainder; fill it at random.
     if len(picked) < n:
         chosen = {q.question_id for q in picked}
         rest = [q for q in questions if q.question_id not in chosen]

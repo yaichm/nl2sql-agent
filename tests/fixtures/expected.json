@@ -1,0 +1,41 @@
+{
+  "questions": 50,
+  "execution_accuracy": 0.44,
+  "soft_f1": 0.5024,
+  "valid_sql_rate": 0.92,
+  "executed_ok": 46,
+  "breakdown": {
+    "correct": 22,
+    "wrong_result": 24,
+    "sql_error": 4,
+    "gold_failed": 0
+  },
+  "by_difficulty": {
+    "challenging": {
+      "total": 6,
+      "correct": 2,
+      "execution_accuracy": 0.3333,
+      "soft_f1": 0.3333
+    },
+    "moderate": {
+      "total": 19,
+      "correct": 6,
+      "execution_accuracy": 0.3158,
+      "soft_f1": 0.436
+    },
+    "simple": {
+      "total": 25,
+      "correct": 14,
+      "execution_accuracy": 0.56,
+      "soft_f1": 0.5933
+    }
+  },
+  "latency_mean_s": 2.128,
+  "tokens": {
+    "prompt_total": 118461,
+    "completion_total": 7401,
+    "total": 125862,
+    "prompt_per_question": 2369,
+    "completion_per_question": 148
+  }
+}

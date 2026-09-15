@@ -1,4 +1,4 @@
-"""Interface des fournisseurs de modèles."""
+"""Model provider interface."""
 
 from dataclasses import dataclass
 from typing import Protocol
@@ -18,7 +18,7 @@ class Completion:
 
 
 class LLMProvider(Protocol):
-    """Tout ce dont le reste du projet a besoin d'un modèle."""
+    """Everything the rest of the project needs from a model."""
 
     name: str
     model: str

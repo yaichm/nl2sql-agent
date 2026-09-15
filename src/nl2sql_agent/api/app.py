@@ -1,4 +1,4 @@
-"""API FastAPI et page de démonstration."""
+"""FastAPI app and demo page."""
 
 from functools import lru_cache
 from pathlib import Path
@@ -21,7 +21,7 @@ STATIC = Path(__file__).parent / "static"
 
 @lru_cache(maxsize=1)
 def cached_schema() -> str:
-    """L'introspection prend ~30s à cause de l'échantillonnage. Une fois suffit."""
+    """Introspection takes ~30s because of the sampling. Once is enough."""
     with admin_connection() as conn:
         tables = introspect(conn)
     return format_schema(tables)

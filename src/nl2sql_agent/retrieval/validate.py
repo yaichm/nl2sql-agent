@@ -1,10 +1,10 @@
-"""Validation du SQL généré avant exécution.
+"""Validates generated SQL before it runs.
 
-Trois raisons de valider plutôt que de laisser PostgreSQL refuser. La sécurité,
-d'abord : une requête interdite ne doit jamais atteindre la base. La qualité du
-retour, ensuite : « la colonne client.date_joined n'existe pas, peut-être
-customers.date » est exploitable par une boucle de correction, « syntax error »
-ne l'est pas. Le coût, enfin : quelques millisecondes contre un aller-retour.
+Three reasons to validate rather than let PostgreSQL reject. Security first:
+a forbidden query must never reach the database. Feedback quality next:
+"column client.date_joined does not exist, maybe customers.date" is
+actionable by a repair loop, "syntax error" is not. Cost last: a few
+milliseconds versus a round-trip.
 """
 
 from dataclasses import dataclass, field
@@ -14,8 +14,8 @@ from sqlglot import exp
 
 from nl2sql_agent.catalog.introspect import Table
 
-# Tout ce qui modifie l'état de la base. La liste est explicite plutôt que
-# déduite : on préfère rater une nouveauté de PostgreSQL que la laisser passer.
+# Anything that mutates DB state. Listed explicitly rather than inferred:
+# better to miss a new PostgreSQL feature than to let one slip through.
 FORBIDDEN = (
     exp.Insert,
     exp.Update,
@@ -31,7 +31,7 @@ FORBIDDEN = (
 
 @dataclass
 class Issue:
-    """Un problème détecté. `suggestion` alimente le prompt de correction."""
+    """A detected problem. `suggestion` feeds the repair prompt."""
 
     kind: str
     target: str
@@ -56,7 +56,7 @@ class Validation:
 
     @property
     def blocked(self) -> bool:
-        """Un refus de sécurité est terminal : on ne tente pas de le réparer."""
+        """A security refusal is terminal — we don't try to repair it."""
         return any(i.kind in ("forbidden", "not_select") for i in self.issues)
 
     def as_feedback(self) -> str:
@@ -64,11 +64,11 @@ class Validation:
 
 
 class Catalog:
-    """Index des identifiants réels, pour vérifier ceux que le modèle produit.
+    """Index of real identifiers, used to check the ones the model produces.
 
-    PostgreSQL replie les identifiants nus en minuscules, donc la comparaison se
-    fait en minuscules. Les colonnes comme "aCL IgG" existent sous leur forme
-    exacte : on garde les deux.
+    PostgreSQL folds bare identifiers to lowercase, so comparisons are done
+    in lowercase. Columns like "aCL IgG" only exist under their exact form,
+    so we keep both.
     """
 
     def __init__(self, tables: list[Table]) -> None:
@@ -89,7 +89,7 @@ class Catalog:
         return column.lower() in self.all_columns
 
     def closest_table(self, name: str) -> str | None:
-        """Suggestion par sous-chaîne : suffit pour les fautes courantes."""
+        """Substring-based suggestion — good enough for common typos."""
         target = name.lower()
         for candidate in self.columns:
             if target in candidate or candidate in target:
@@ -102,9 +102,9 @@ class Catalog:
 
 
 def _check_forbidden(tree: exp.Expression) -> list[Issue]:
-    """Une écriture peut être cachée dans une CTE ou une sous-requête.
+    """A write can hide inside a CTE or a subquery.
 
-    C'est pourquoi on parcourt tout l'arbre au lieu de regarder la racine.
+    That's why we walk the whole tree instead of only checking the root.
     """
     issues = []
     for node in tree.walk():
@@ -137,7 +137,7 @@ def _check_tables(tree: exp.Expression, catalog: Catalog) -> list[Issue]:
 
 
 def _alias_map(tree: exp.Expression) -> dict[str, str]:
-    """Alias vers nom de table réel, pour résoudre les colonnes qualifiées."""
+    """Alias to real table name, for resolving qualified columns."""
     aliases = {}
     for table in tree.find_all(exp.Table):
         if table.alias:
@@ -148,11 +148,10 @@ def _alias_map(tree: exp.Expression) -> dict[str, str]:
 
 
 def _check_columns(tree: exp.Expression, catalog: Catalog) -> list[Issue]:
-    """Vérifie les colonnes qualifiées, et l'existence des autres.
+    """Checks qualified columns, and that the others exist.
 
-    Une colonne non qualifiée ne peut être rattachée à une table sans résoudre
-    la portée complète de la requête : on se contente de vérifier qu'elle
-    existe quelque part.
+    An unqualified column can't be tied to a specific table without resolving
+    the query's full scope, so we just check it exists somewhere.
     """
     aliases = _alias_map(tree)
     issues = []
@@ -166,7 +165,7 @@ def _check_columns(tree: exp.Expression, catalog: Catalog) -> list[Issue]:
         if qualifier:
             table = aliases.get(qualifier.lower())
             if table is None or not catalog.has_table(table):
-                continue  # la table est déjà signalée par _check_tables
+                continue  # table already flagged by _check_tables
             if not catalog.has_column(name, table):
                 owners = catalog.tables_having(name)
                 issues.append(
@@ -180,9 +179,9 @@ def _check_columns(tree: exp.Expression, catalog: Catalog) -> list[Issue]:
                     )
                 )
         else:
-            # Une colonne non qualifiée doit appartenir à l'une des tables
-            # citées par la requête. Vérifier seulement qu'elle existe quelque
-            # part laisse passer le cas où le modèle oublie de joindre la table.
+            # An unqualified column must belong to one of the tables the
+            # query cites. Just checking it exists somewhere would let
+            # through the case where the model forgot to join the table.
             in_scope = {t.name.lower() for t in tree.find_all(exp.Table)}
             candidates = set(catalog.tables_having(name))
             if not candidates & in_scope:
@@ -203,7 +202,7 @@ def _check_columns(tree: exp.Expression, catalog: Catalog) -> list[Issue]:
 
 
 def validate(sql: str, catalog: Catalog) -> Validation:
-    """Parse et contrôle une requête. Ne l'exécute jamais."""
+    """Parses and checks a query. Never runs it."""
     if not sql.strip():
         return Validation(sql, [Issue("empty", "", "requête vide")])
 
@@ -236,7 +235,7 @@ def validate(sql: str, catalog: Catalog) -> Validation:
 
     issues = _check_forbidden(tree)
     if issues:
-        return Validation(sql, issues)  # refus terminal, inutile de creuser
+        return Validation(sql, issues)  # terminal refusal, no point digging
 
     issues += _check_tables(tree, catalog)
     issues += _check_columns(tree, catalog)
@@ -245,18 +244,18 @@ def validate(sql: str, catalog: Catalog) -> Validation:
 
 
 def force_limit(sql: str, limit: int = 1000) -> str:
-    """Ajoute un LIMIT si la requête n'en a pas.
+    """Adds a LIMIT if the query has none.
 
-    Garde-fou de dernier recours : une requête correcte peut ramener un million
-    de lignes et saturer la mémoire du processus.
+    Last-resort guardrail: a perfectly correct query can return a million
+    rows and blow up process memory.
     """
     try:
         tree = sqlglot.parse_one(sql, dialect="postgres")
     except sqlglot.ParseError:
         return sql
 
-    # Seules les Select portent un LIMIT ; pour le reste on rend la requête
-    # telle quelle, la validation l'aura de toute façon rejetée.
+    # Only Select carries a LIMIT; for anything else we return the query
+    # as-is — validation will have rejected it already.
     if not isinstance(tree, exp.Select):
         return sql
     if tree.args.get("limit") is not None:

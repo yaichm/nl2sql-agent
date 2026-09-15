@@ -1,4 +1,4 @@
-"""Affiche le résultat de l'introspection. uv run python -m scripts.inspect_schema"""
+"""Prints the introspection result. uv run python -m scripts.inspect_schema"""
 
 from nl2sql_agent.catalog.db import admin_connection, check_connections
 from nl2sql_agent.catalog.introspect import introspect

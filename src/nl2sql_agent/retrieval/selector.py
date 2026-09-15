@@ -1,8 +1,8 @@
-"""Sélection du schéma envoyé au modèle.
+"""Picks which schema goes into the prompt.
 
-C'est le point de variation du projet : la baseline envoie tout, la recherche
-hybride ne retient que les tables pertinentes. Le reste du pipeline ne change
-pas, ce qui permet de comparer les deux à protocole identique.
+This is the project's variation point: baseline sends everything, hybrid
+retrieval keeps only relevant tables. The rest of the pipeline is unchanged,
+so both can be compared under an identical protocol.
 """
 
 from typing import Protocol
@@ -19,18 +19,18 @@ class SchemaSelector(Protocol):
 
     @property
     def tables_in_prompt(self) -> int:
-        """Nombre de tables réellement envoyées au modèle."""
+        """How many tables actually reach the model."""
         ...
 
     def select(self, question: str) -> str:
-        """Le texte de schéma à injecter dans le prompt pour cette question."""
+        """Schema text to inject into the prompt for this question."""
         ...
 
 
 class FullSchema:
-    """Baseline : tout le schéma, quelle que soit la question.
+    """Baseline: the full schema, regardless of the question.
 
-    Sert de référence. Ne doit plus changer une fois la première mesure prise.
+    Reference point. Frozen once the first measurement is taken.
     """
 
     name = "baseline"
@@ -49,10 +49,10 @@ class FullSchema:
 
 
 class HybridRetrieval:
-    """Recherche hybride : dense et lexicale fusionnées par RRF.
+    """Hybrid retrieval: dense and lexical, fused by RRF.
 
-    Garde la trace des tables retenues par question, pour pouvoir mesurer le
-    rappel contre les tables citées dans la requête de référence.
+    Tracks the tables picked per question, so recall can be measured against
+    the tables cited in the gold query.
     """
 
     name = "hybrid"
@@ -97,7 +97,7 @@ def build(
     conn: psycopg.Connection | None = None,
     top_k: int = 10,
 ) -> SchemaSelector:
-    """Le mode agent réutilise la recherche hybride : seule la boucle change."""
+    """Agent mode reuses hybrid retrieval; only the loop differs."""
     if mode == "baseline":
         return FullSchema(tables)
     if mode in ("hybrid", "agent"):

@@ -1,8 +1,8 @@
-"""Diagnostic de la validation sur des prédictions déjà produites.
+"""Validation diagnostic on already-produced predictions.
 
-Rejoue la validation sur un fichier predictions.json sans appeler le modèle :
-combien d'erreurs SQL auraient été détectées avant exécution, et combien de
-requêtes correctes seraient rejetées à tort.
+Replays validation over a predictions.json without calling the model: how
+many SQL errors would have been caught before execution, and how many
+correct queries would be wrongly rejected.
 """
 
 import json
@@ -43,7 +43,7 @@ def check_predictions(conn: psycopg.Connection, path: Path) -> dict[str, Any]:
                     f"{pred['question_id']} manquée : {(pred['execution_error'] or '')[:90]}"
                 )
         elif correct and not result.ok:
-            # Le cas coûteux : une requête juste que la validation rejette.
+            # The costly case: validation rejecting a correct query.
             false_positive += 1
             examples.append(f"{pred['question_id']} FAUX POSITIF : {result.issues[0]}")
         else:

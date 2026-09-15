@@ -1,9 +1,8 @@
-"""Génération des prédictions. Aucune évaluation ici.
+"""Generates predictions. No evaluation here.
 
-Sépare l'appel au modèle de la mesure : on peut réévaluer les mêmes prédictions
-autant de fois qu'on veut sans repayer l'API. Le fichier produit est
-autosuffisant — requête générée, son résultat, requête de référence, son
-résultat.
+Keeps model calls separate from measurement, so the same predictions can be
+re-evaluated as often as needed without paying the API again. The output
+file is self-contained — generated query, its result, gold query, its result.
 """
 
 import json
@@ -43,7 +42,7 @@ class Prediction:
 
 
 def serializable(rows: list[tuple[Any, ...]] | None) -> list[list[Any]] | None:
-    """psycopg rend des Decimal et des date : JSON ne sait pas les écrire."""
+    """psycopg returns Decimal and date; JSON can't serialize them."""
     if rows is None:
         return None
     return [
@@ -56,7 +55,7 @@ def _gold(
     question: Question,
     cache: dict[int, tuple[list[list[Any]] | None, str | None]],
 ) -> tuple[list[list[Any]] | None, str | None]:
-    """La référence ne dépend pas du modèle : une exécution par question suffit."""
+    """Gold doesn't depend on the model — one execution per question is enough."""
     if question.question_id not in cache:
         rows, error = execute(question.gold_sql)
         cache[question.question_id] = (serializable(rows), error)
@@ -73,10 +72,10 @@ def generate(
     catalog: Catalog | None = None,
     max_attempts: int = 3,
 ) -> Path:
-    """Génère les prédictions et rend le chemin du fichier écrit.
+    """Generates predictions and returns the written file path.
 
-    En mode agent, chaque question passe par le graphe : validation puis boucle
-    de correction bornée. Sinon, une seule passe.
+    In agent mode, every question goes through the graph: validation, then a
+    bounded repair loop. Otherwise, a single pass.
     """
     mode = "agent" if agent else selector.name
     print(

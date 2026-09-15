@@ -1,11 +1,11 @@
-"""Graphe de génération SQL avec boucle de correction.
+"""SQL generation graph with a repair loop.
 
-Deux arêtes font de cet enchaînement un agent plutôt qu'un pipeline : une
-validation qui échoue renvoie vers la génération, une exécution qui échoue
-aussi. Les deux sont bornées — une boucle de correction sans plafond est la
-façon classique de brûler un budget API sur une seule question malformée.
+Two back-edges turn this pipeline into an agent: a failed validation loops
+back to generation, and so does a failed execution. Both are bounded — an
+uncapped repair loop is the classic way to burn an API budget on a single
+malformed question.
 
-    question -> generate -> validate --+-- ok --> execute --+-- ok --> fin
+    question -> generate -> validate --+-- ok --> execute --+-- ok --> end
                    ^                  |                    |
                    +----- repair <----+--------------------+
 """
@@ -42,7 +42,7 @@ class AgentState(TypedDict, total=False):
 
 @dataclass
 class AgentResult:
-    """Ce que le graphe rend, aligné sur Attempt pour rester interchangeable."""
+    """Graph output, aligned with Attempt so the two stay interchangeable."""
 
     question: str
     sql: str
@@ -77,7 +77,7 @@ def build_graph(
     max_attempts: int = 3,
     row_limit: int = 1000,
 ) -> Any:
-    """Construit le graphe. Les dépendances sont capturées par fermeture."""
+    """Builds the graph. Dependencies are captured via closure."""
 
     def node_retrieve(state: AgentState) -> AgentState:
         return {
@@ -94,8 +94,8 @@ def build_graph(
         exec_error = state.get("execution_error")
 
         if errors or exec_error:
-            # Passe de réparation : le modèle reçoit sa requête et l'erreur
-            # exacte, pas seulement la question d'origine.
+            # Repair pass: the model gets its own query and the exact error,
+            # not just the original question.
             problems = "\n".join(f"- {e}" for e in errors) or f"- {exec_error}"
             user = REPAIR_TEMPLATE.format(sql=state["sql"], errors=problems)
         else:
@@ -132,8 +132,8 @@ def build_graph(
         if not state.get("validation_errors"):
             return "execute"
         if state.get("blocked"):
-            # Un refus de sécurité est terminal : on ne demande pas au modèle
-            # de contourner un garde-fou.
+            # Security refusal is terminal — we don't ask the model to work
+            # around a guardrail.
             return "give_up"
         if state.get("attempts", 0) >= max_attempts:
             return "give_up"
@@ -176,7 +176,7 @@ def answer(
     question: str,
     evidence: str = "",
 ) -> AgentResult:
-    """Exécute le graphe sur une question."""
+    """Runs the graph on a single question."""
     final: AgentState = compiled.invoke(
         {"question": question, "evidence": evidence},
         {"recursion_limit": 50},

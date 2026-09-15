@@ -1,7 +1,7 @@
-"""Comparaison des runs d'évaluation.
+"""Compares evaluation runs.
 
-Lit tous les fichiers evaluation-*.json de reports/, garde le plus récent par
-tag, et produit un tableau comparatif plus trois graphiques.
+Reads every evaluation-*.json under reports/, keeps the latest per tag, and
+outputs a comparison table plus three charts.
 
     uv run nl2sql analyse
     uv run nl2sql analyse --tags baseline hybrid
@@ -13,7 +13,7 @@ from typing import Any
 
 import matplotlib
 
-matplotlib.use("Agg")  # pas de serveur graphique ici
+matplotlib.use("Agg")  # no display server here
 import matplotlib.pyplot as plt  # noqa: E402
 
 REPORTS = Path("reports")
@@ -21,12 +21,12 @@ OUTPUT = REPORTS / "analysis"
 
 DIFFICULTIES = ("simple", "moderate", "challenging")
 
-# Vert, orange, rouge, gris : correct, à côté, en échec, défaut du benchmark.
+# Green, orange, red, grey: correct, wrong answer, failed, benchmark bug.
 ACCENT = "#2d5f8b"
 
 
 def load_runs(tags: list[str] | None) -> list[dict[str, Any]]:
-    """Le run le plus récent de chaque tag, trié par ordre alphabétique de tag."""
+    """Latest run per tag, sorted alphabetically by tag."""
     latest: dict[str, tuple[str, dict[str, Any]]] = {}
 
     for path in sorted(REPORTS.glob("*/evaluation-*.json")):
@@ -43,7 +43,7 @@ def load_runs(tags: list[str] | None) -> list[dict[str, Any]]:
 
 
 def print_table(runs: list[dict[str, Any]]) -> str:
-    """Tableau markdown, affiché et rendu pour écriture sur disque."""
+    """Markdown table, printed and returned so it can be written to disk."""
     header = (
         "| Run | Modèle | Tables | EX | Soft F1 | Tokens/q | Latence |\n"
         "|---|---|---|---|---|---|---|\n"
@@ -62,7 +62,7 @@ def print_table(runs: list[dict[str, Any]]) -> str:
 
 
 def _question_count(runs: list[dict[str, Any]]) -> int:
-    """Les runs comparés doivent porter sur le même échantillon."""
+    """Compared runs must cover the same sample."""
     return int(runs[0]["summary"]["questions"])
 
 
@@ -74,7 +74,7 @@ def _style(ax: Any) -> None:
 
 
 def chart_accuracy(runs: list[dict[str, Any]]) -> None:
-    """EX et Soft F1 côte à côte, un groupe par run."""
+    """EX and Soft F1 side by side, one group per run."""
     tags = [r["config"]["tag"] for r in runs]
     ex = [r["summary"]["execution_accuracy"] for r in runs]
     f1 = [r["summary"]["soft_f1"] for r in runs]
@@ -103,10 +103,10 @@ def chart_accuracy(runs: list[dict[str, Any]]) -> None:
 
 
 def chart_by_difficulty(runs: list[dict[str, Any]]) -> None:
-    """EX et Soft F1 par difficulté : le score global masque de gros écarts."""
+    """EX and Soft F1 per difficulty — the overall score hides big gaps."""
     tags = [r["config"]["tag"] for r in runs]
     x = range(len(DIFFICULTIES))
-    # Deux barres par run et par difficulté : EX pleine, Soft F1 atténuée.
+    # Two bars per run per difficulty: EX solid, Soft F1 faded.
     width = 0.8 / max(2 * len(runs), 1)
 
     fig, ax = plt.subplots(figsize=(3.2 * len(runs) + 4, 4.4))
@@ -145,7 +145,7 @@ def chart_by_difficulty(runs: list[dict[str, Any]]) -> None:
 
 
 def chart_cost(runs: list[dict[str, Any]]) -> None:
-    """Tokens par question contre exactitude : le compromis coût / qualité."""
+    """Tokens per question against accuracy — the cost/quality tradeoff."""
     fig, ax = plt.subplots(figsize=(6.5, 4.6))
 
     for run in runs:

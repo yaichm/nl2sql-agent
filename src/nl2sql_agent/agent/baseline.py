@@ -1,6 +1,6 @@
-"""Version naïve : schéma complet dans le prompt, une génération, une exécution.
+"""Naive version: full schema in the prompt, one generation, one execution.
 
-Sert de référence. Toute amélioration ultérieure se mesure contre elle.
+Serves as the reference. Every later improvement is measured against it.
 """
 
 import re
@@ -64,7 +64,7 @@ def build_prompt(question: str, schema: str, evidence: str = "") -> str:
 
 
 def clean_sql(raw: str) -> str:
-    """Les modèles entourent souvent le SQL de balises Markdown."""
+    """Models often wrap SQL in Markdown fences."""
     text = raw.strip()
 
     fenced = re.search(r"```(?:sql)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
@@ -75,12 +75,12 @@ def clean_sql(raw: str) -> str:
 
 
 def execute(sql: str, limit: int = 1000) -> tuple[list[tuple[Any, ...]] | None, str | None]:
-    """Exécute avec le rôle en lecture seule. L'erreur est retournée, pas levée."""
+    """Runs under the read-only role. Errors are returned, not raised."""
     try:
         with readonly_connection() as conn, conn.cursor() as cur:
             cur.execute(sql)
             return cur.fetchmany(limit), None
-    except Exception as exc:  # noqa: BLE001 - une erreur SQL est une donnée, pas un bug
+    except Exception as exc:  # noqa: BLE001 - a SQL error is data, not a bug
         return None, str(exc).strip()
 
 

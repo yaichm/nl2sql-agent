@@ -1,8 +1,7 @@
-"""Recherche hybride dans le catalogue.
+"""Hybrid retrieval over the catalog.
 
-Deux signaux, fusionnés par RRF. Le dense comprend le sens et rattrape les
-reformulations ; le lexical attrape les identifiants littéraux que les
-embeddings manquent régulièrement.
+Two signals fused by RRF. Dense captures meaning and handles rephrasings;
+lexical catches literal identifiers that embeddings routinely miss.
 """
 
 from dataclasses import dataclass
@@ -12,12 +11,12 @@ import psycopg
 from nl2sql_agent.retrieval import embed as embed_module
 from nl2sql_agent.retrieval.index import SCHEMA
 
-# Constante du papier RRF. Elle atténue l'écart entre les premières positions :
-# sans elle, la place 1 écraserait tout le reste.
+# Constant from the RRF paper. Softens the gap between top ranks; without it,
+# position 1 would crush everything else.
 RRF_K = 60
 
-# On récupère large avant de fusionner : une table classée 20e par un signal
-# peut remonter si l'autre la place bien.
+# Fetch wide before fusing: a table ranked 20th by one signal can climb back
+# up if the other places it high.
 CANDIDATES = 30
 
 
@@ -30,7 +29,7 @@ class Hit:
 
 
 def dense_search(conn: psycopg.Connection, question: str, limit: int) -> list[str]:
-    """Similarité cosinus sur les embeddings. <=> est l'opérateur de pgvector."""
+    """Cosine similarity on the embeddings. <=> is pgvector's operator."""
     vector = embed_module.to_pgvector(embed_module.embed_one(question))
     with conn.cursor() as cur:
         cur.execute(
@@ -46,12 +45,12 @@ def dense_search(conn: psycopg.Connection, question: str, limit: int) -> list[st
 
 
 def lexical_search(conn: psycopg.Connection, question: str, limit: int) -> list[str]:
-    """Recherche plein texte PostgreSQL.
+    """PostgreSQL full-text search.
 
-    websearch_to_tsquery et plainto_tsquery joignent les termes par ET : une
-    question entière n'a alors aucune chance de correspondre, puisqu'elle
-    contient des mots absents du catalogue (« 6 », « 2013 »). On passe donc la
-    question par to_tsvector pour obtenir ses racines, puis on les joint par OU.
+    websearch_to_tsquery and plainto_tsquery AND the terms together, which
+    kills any chance of a match for a whole question — it contains words the
+    catalog doesn't ("6", "2013"). We tokenize the question via to_tsvector,
+    then OR the stems back together.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -76,8 +75,8 @@ def lexical_search(conn: psycopg.Connection, question: str, limit: int) -> list[
 def rrf(rankings: list[list[str]], k: int = RRF_K) -> dict[str, float]:
     """Reciprocal Rank Fusion.
 
-    Travaille sur les rangs et non sur les scores : pas de normalisation entre
-    des échelles incomparables, pas de poids à régler par jeu de données.
+    Works on ranks rather than scores: no normalization across incomparable
+    scales, and no weights to tune per dataset.
     """
     scores: dict[str, float] = {}
     for ranking in rankings:
@@ -91,11 +90,11 @@ def expand_foreign_keys(
     edges: dict[str, set[str]],
     limit: int,
 ) -> list[str]:
-    """Ajoute les voisins par clé étrangère des tables retenues.
+    """Adds FK neighbours of the selected tables.
 
-    Une jointure est impossible si un seul de ses deux côtés a été récupéré.
-    Sur cette base, 35 tables sur 75 n'ont aucune clé étrangère déclarée :
-    l'expansion ne couvre donc que la moitié des cas.
+    A join is impossible if only one of its two sides has been retrieved.
+    Note: 35 of 75 tables have no declared FKs on this database, so expansion
+    only helps in about half the cases.
     """
     result = list(names)
     for name in names:
@@ -111,7 +110,7 @@ def search(
     top_k: int = 10,
     edges: dict[str, set[str]] | None = None,
 ) -> list[Hit]:
-    """Les top_k tables les plus pertinentes pour cette question."""
+    """Top_k tables most relevant to this question."""
     dense = dense_search(conn, question, CANDIDATES)
     lexical = lexical_search(conn, question, CANDIDATES)
 

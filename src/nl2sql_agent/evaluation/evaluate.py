@@ -1,6 +1,6 @@
-"""Évaluation d'un fichier de prédictions. Aucun appel au modèle.
+"""Evaluates a predictions file. No model calls here.
 
-Tous les taux sont exprimés entre 0 et 1.
+All rates are expressed between 0 and 1.
 """
 
 import json
@@ -15,14 +15,14 @@ def _rows(raw: list[list[Any]] | None) -> list[tuple[Any, ...]] | None:
 
 
 def categorize(pred: dict[str, Any], correct: bool) -> str:
-    """Quatre issues, qui appellent des corrections différentes."""
+    """Four buckets, each pointing to a different fix."""
     if correct:
         return "correct"
     if pred["gold_error"]:
-        return "gold_failed"  # défaut du benchmark, pas du système
+        return "gold_failed"  # benchmark bug, not ours
     if pred["execution_error"]:
-        return "sql_error"  # la requête n'a pas pu s'exécuter
-    return "wrong_result"  # SQL valide, mais répond à côté
+        return "sql_error"  # query failed to run
+    return "wrong_result"  # valid SQL, wrong answer
 
 
 def evaluate_one(pred: dict[str, Any]) -> dict[str, Any]:
@@ -96,7 +96,7 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def evaluate_file(predictions: Path) -> Path:
-    """Évalue un fichier de prédictions et rend le chemin du résultat."""
+    """Evaluates a predictions file and returns the output path."""
     payload = json.loads(predictions.read_text(encoding="utf-8"))
     config = payload["config"]
 

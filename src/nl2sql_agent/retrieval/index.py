@@ -1,8 +1,8 @@
-"""Construction de l'index de recherche.
+"""Builds the search index.
 
-Le catalogue vit dans un schéma séparé, nl2sql_catalog, pour ne pas apparaître
-dans l'introspection de public : sinon le modèle verrait sa propre table
-d'index parmi les tables métier.
+The catalog lives in its own schema, nl2sql_catalog, so it doesn't surface
+when introspecting public — otherwise the model would see its own index
+table sitting alongside the business tables.
 """
 
 import psycopg
@@ -14,8 +14,9 @@ from nl2sql_agent.retrieval.describe import searchable_text
 
 SCHEMA = "nl2sql_catalog"
 
-# psycopg passe en mode "prepared statement" dès qu'il y a un paramètre, et
-# celui-ci n'accepte qu'une instruction. D'où la liste plutôt qu'un bloc unique.
+# psycopg switches to "prepared statement" mode as soon as a parameter is
+# involved, and that mode only accepts one statement. Hence a list rather
+# than one big block.
 DDL = [
     "CREATE EXTENSION IF NOT EXISTS vector",
     f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}",
@@ -41,13 +42,13 @@ def build(
     tables: list[Table],
     descriptions: dict[str, str],
 ) -> int:
-    """Reconstruit l'index depuis zéro. Rend le nombre d'entrées écrites."""
+    """Rebuilds the index from scratch. Returns the number of rows written."""
     dim = get_settings().embedding_dim
 
     with conn.cursor() as cur:
         for statement in DDL:
-            # La dimension est une valeur de type, pas un paramètre : elle ne
-            # peut pas passer par %s, d'où le format.
+            # Dimension is a type argument, not a bind parameter, so it can't
+            # go through %s — we format it in instead.
             cur.execute(statement.format(dim=dim))
     conn.commit()
 

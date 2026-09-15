@@ -1,4 +1,4 @@
-"""Sélection du fournisseur depuis la configuration."""
+"""Provider selection from configuration."""
 
 from nl2sql_agent.config import get_settings
 from nl2sql_agent.providers.openai_compatible import OpenAICompatibleProvider

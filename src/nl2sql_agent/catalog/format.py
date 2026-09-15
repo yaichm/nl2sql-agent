@@ -1,14 +1,14 @@
-"""Mise en forme du schéma pour le prompt."""
+"""Schema formatting for the prompt."""
 
 from nl2sql_agent.catalog.introspect import Table
 
 
 def quote(identifier: str) -> str:
-    """Entoure de guillemets tout identifiant qui n'est pas en minuscules simples.
+    """Quotes any identifier that isn't plain lowercase.
 
-    PostgreSQL replie les identifiants nus en minuscules. Une colonne créée
-    comme "First Date" ou "aCL IgG" ne répond donc qu'à sa forme exacte,
-    guillemets compris. Sans ça le modèle écrit first_date et la requête échoue.
+    PostgreSQL folds bare identifiers to lowercase. A column created as
+    "First Date" or "aCL IgG" only responds to its exact form, quotes and
+    all. Without this the model writes first_date and the query fails.
     """
     if identifier.islower() and identifier.replace("_", "").isalnum():
         return identifier
@@ -16,7 +16,7 @@ def quote(identifier: str) -> str:
 
 
 def format_table(table: Table) -> str:
-    """Une table en DDL. Le modèle a vu des millions de CREATE TABLE."""
+    """One table as DDL. The model has seen millions of CREATE TABLE."""
     lines = [f"CREATE TABLE {quote(table.name)} ("]
 
     body: list[str] = []
@@ -32,7 +32,7 @@ def format_table(table: Table) -> str:
             line = f"{line},"
         body.append(line)
 
-    # Virgule finale retirée sur la dernière colonne.
+    # Drop the trailing comma on the last column.
     if body:
         last = body[-1]
         if "--" in last:
@@ -54,19 +54,19 @@ def format_table(table: Table) -> str:
 
 
 def format_schema(tables: list[Table], max_tables: int | None = None) -> str:
-    """Le schéma complet, ou les n premières tables.
+    """The full schema, or the first n tables.
 
-    max_tables sert quand la recherche ne renvoie que les tables pertinentes ;
-    pour la baseline on passe tout.
+    max_tables is used when retrieval only returns the relevant tables; the
+    baseline passes everything.
     """
     selected = tables[:max_tables] if max_tables else tables
     return "\n\n".join(format_table(t) for t in selected)
 
 
 def estimate_tokens(text: str) -> int:
-    """Approximation grossière : ~4 caractères par token.
+    """Rough approximation: ~4 characters per token.
 
-    Suffisant pour savoir si un prompt tient dans la fenêtre de contexte. Le
-    compte exact vient de l'API, dans le champ usage de la réponse.
+    Enough to check whether a prompt fits the context window. The exact
+    count comes back from the API in the response's usage field.
     """
     return len(text) // 4

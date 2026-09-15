@@ -1,13 +1,14 @@
-"""Introspection du schéma via les catalogues système."""
+"""Schema introspection via the system catalogs."""
 
 from dataclasses import dataclass, field
 
 import psycopg
 
-# Types dont les valeurs sont interprétables. Pas les identifiants ni les mesures.
+# Types whose values are interpretable. Skips identifiers and raw measurements.
 _SAMPLEABLE = {"text", "character varying", "character", "date", "boolean"}
 
-# Au-delà, la colonne est un identifiant : trois valeurs au hasard n'apprennent rien.
+# Past this, the column is essentially an identifier — three random values
+# teach nothing useful.
 _MAX_DISTINCT = 50
 
 
@@ -57,7 +58,7 @@ def _fetch_columns(conn: psycopg.Connection, schema: str) -> dict[str, list[Colu
 
 
 def _fetch_primary_keys(conn: psycopg.Connection, schema: str) -> dict[str, set[str]]:
-    # pg_index plutôt que information_schema : moins de jointures
+    # pg_index rather than information_schema — fewer joins
     query = """
         SELECT cls.relname, att.attname
         FROM pg_index idx
@@ -76,7 +77,7 @@ def _fetch_primary_keys(conn: psycopg.Connection, schema: str) -> dict[str, set[
 
 
 def _fetch_foreign_keys(conn: psycopg.Connection, schema: str) -> dict[str, list[ForeignKey]]:
-    # unnest WITH ORDINALITY pour gérer les FK composées
+    # unnest WITH ORDINALITY to handle composite FKs
     query = """
         SELECT
             src_cls.relname, src_att.attname,
@@ -125,7 +126,7 @@ def _fetch_samples(
     tables: list[Table],
     per_column: int = 3,
 ) -> None:
-    """Remplit sample_values sur les colonnes à faible cardinalité."""
+    """Fills sample_values on low-cardinality columns."""
     with conn.cursor() as cur:
         for table in tables:
             if table.row_estimate == 0:

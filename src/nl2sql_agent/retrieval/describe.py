@@ -1,10 +1,10 @@
-"""Descriptions des tables en langage naturel.
+"""Natural-language table descriptions.
 
-Le catalogue brut contient des noms opaques : atom, bond, frq_issd, A2.
-Chercher dedans ne donne rien. On génère donc une description par table à
-partir de sa structure et de ses valeurs d'exemple, une fois, mise en cache.
+Raw catalog names are opaque: atom, bond, frq_issd, A2. Searching over them
+yields nothing. So we generate one description per table from its structure
+and sample values, once, and cache it.
 
-C'est ce texte qui sera indexé, pas les noms de colonnes.
+That text is what gets indexed, not the column names.
 """
 
 import json
@@ -58,10 +58,10 @@ def describe_tables(
     provider: LLMProvider,
     refresh: bool = False,
 ) -> dict[str, str]:
-    """Description par table, calculée une fois puis relue du cache.
+    """Per-table description, computed once then read from cache.
 
-    Le cache est versionné dans catalog/ : les descriptions coûtent un appel API
-    chacune, et ne changent que si le schéma change.
+    Cache lives under catalog/: each description costs one API call and only
+    needs to change when the schema does.
     """
     cache = {} if refresh else load_descriptions()
     missing = [t for t in tables if t.name not in cache]
@@ -74,18 +74,18 @@ def describe_tables(
     for i, table in enumerate(missing, 1):
         cache[table.name] = describe_one(table, provider)
         print(f"\r{i}/{len(missing)}  {table.name:<28}", end="", flush=True)
-        _save_cache(cache)  # écriture à chaque table : un plantage ne perd rien
+        _save_cache(cache)  # flush after every table so a crash loses nothing
 
     print()
     return cache
 
 
 def searchable_text(table: Table, description: str) -> str:
-    """Le texte indexé pour cette table.
+    """Indexed text for this table.
 
-    Assemble la description générée, le nom de la table et ceux des colonnes.
-    Les noms comptent : une question qui cite un identifiant littéral doit
-    pouvoir être retrouvée par la recherche lexicale.
+    Bundles the generated description with the table name and column names.
+    Names matter: a question quoting a literal identifier still needs to be
+    reachable via lexical search.
     """
     columns = " ".join(c.name for c in table.columns)
     samples = " ".join(v for c in table.columns for v in c.sample_values[:2])

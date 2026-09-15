@@ -1,12 +1,12 @@
-"""Point d'entrée unique du projet.
+"""Single entry point for the project.
 
-uv run nl2sql describe                        # décrire les tables
-uv run nl2sql index                           # construire l'index
+uv run nl2sql describe                        # generate table descriptions
+uv run nl2sql index                           # build the search index
 uv run nl2sql search "how much did customer 6 consume"
-uv run nl2sql validate --last hybrid          # diagnostic, sans appel API
+uv run nl2sql validate --last hybrid          # diagnostic, no API call
 uv run nl2sql run --mode baseline --n 50
 uv run nl2sql run --mode hybrid --n 50
-uv run nl2sql run --mode agent --n 50         # recherche + boucle de correction
+uv run nl2sql run --mode agent --n 50         # retrieval + repair loop
 uv run nl2sql eval --last baseline
 uv run nl2sql analyse
 """
@@ -29,7 +29,7 @@ REPORTS = Path("reports")
 
 
 def latest_predictions(tag: str) -> Path:
-    """Le fichier de prédictions le plus récent d'un tag."""
+    """Most recent predictions file for a given tag."""
     candidates = sorted((REPORTS / tag).glob("predictions-*.json"))
     if not candidates:
         raise SystemExit(f"aucune prédiction dans reports/{tag}/")
@@ -104,7 +104,7 @@ def do_eval(args: argparse.Namespace) -> None:
 
 
 def add_generation_args(parser: argparse.ArgumentParser) -> None:
-    """Options communes à generate et run."""
+    """Options shared by generate and run."""
     parser.add_argument("--mode", choices=("baseline", "hybrid", "agent"), default="baseline")
     parser.add_argument("--n", type=int, default=50)
     parser.add_argument(

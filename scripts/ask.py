@@ -1,4 +1,4 @@
-"""Pose une question à la baseline. uv run python -m scripts.ask "ta question" """
+"""Ask the baseline a question. uv run python -m scripts.ask "your question" """
 
 import sys
 

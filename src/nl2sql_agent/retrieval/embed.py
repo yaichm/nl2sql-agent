@@ -1,4 +1,4 @@
-"""Embeddings via l'API Mistral."""
+"""Embeddings via the Mistral API."""
 
 import httpx
 
@@ -6,16 +6,16 @@ from nl2sql_agent.config import get_settings
 
 URL = "https://api.mistral.ai/v1/embeddings"
 
-# L'API accepte une liste ; on découpe pour ne pas dépasser la limite de tokens
-# par requête sur des textes longs.
+# The API takes a list; we batch to stay under the per-request token limit
+# on long texts.
 BATCH_SIZE = 32
 
 
 def embed(texts: list[str], timeout: float = 120.0) -> list[list[float]]:
-    """Vecteurs des textes, dans le même ordre.
+    """Vectors for the texts, in the same order.
 
-    Les questions et le catalogue doivent passer par le même modèle : deux
-    espaces vectoriels différents ne sont pas comparables.
+    Questions and catalog must go through the same model — two different
+    vector spaces aren't comparable.
     """
     settings = get_settings()
     if not settings.mistral_api_key:
@@ -35,7 +35,7 @@ def embed(texts: list[str], timeout: float = 120.0) -> list[list[float]]:
         if response.status_code != 200:
             raise RuntimeError(f"embeddings : {response.status_code} {response.text[:300]}")
         data = response.json()["data"]
-        # L'API peut renvoyer les éléments dans le désordre ; on trie par index.
+        # The API may return items out of order; sort by index.
         vectors.extend(item["embedding"] for item in sorted(data, key=lambda d: d["index"]))
 
     return vectors
@@ -46,8 +46,8 @@ def embed_one(text: str) -> list[float]:
 
 
 def to_pgvector(vector: list[float]) -> str:
-    """pgvector accepte la forme textuelle '[0.1,0.2,...]'.
+    """pgvector accepts the textual form '[0.1,0.2,...]'.
 
-    Évite d'ajouter le paquet pgvector-python pour un seul usage.
+    Avoids pulling in pgvector-python for a single call site.
     """
     return "[" + ",".join(f"{v:.7f}" for v in vector) + "]"
